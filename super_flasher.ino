@@ -39,13 +39,13 @@ class SingleLED : public LED {
 };
 
 
-class TripleLED : public LED {
+class RGBLED : public LED {
   protected:
     int _pins[3], _onPin;
   
   public:
   
-  TripleLED(int redPin, int greenPin, int bluePin, int onPin)
+  RGBLED(int redPin, int greenPin, int bluePin, int onPin)
   {
     ledOn = false;
     _pins[0] = redPin;
@@ -146,17 +146,17 @@ class Flasher {
 
 
 
-TripleLED *triple1, *triple2;
+RGBLED *triple1, *triple2;
 SingleLED *single1, *single2;
 Flasher *flasher1, *flasher2, *flasher3, *flasher4;
  
 void setup()
 {
   Serial.begin(9600); 
-  triple1 = new TripleLED(9,10,11,2);
+  triple1 = new RGBLED(9,10,11,2);
   flasher1 = new Flasher(0, triple1);
   
-  triple2 = new TripleLED(3, 5, 6, 4);
+  triple2 = new RGBLED(3, 5, 6, 4);
   flasher2 = new Flasher(1, triple2);
   
   single1 = new SingleLED(7);
