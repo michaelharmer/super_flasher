@@ -1,3 +1,5 @@
+#include <Bounce.h>
+
 #define FLASH_LENGTH 100
 
 class LED {
@@ -94,6 +96,50 @@ class RGBLED : public LED {
   
 };
 
+class MultiLED : public LED {
+  protected:
+    LED **_leds;
+    int _num;
+  
+  public:
+  
+  MultiLED(LED *led1, LED *led2, LED *led3, LED *led4)
+  {
+    _leds = (LED **) malloc(sizeof(LED *) * 4);
+    _leds[0] = led1;
+    _leds[1] = led2;
+    _leds[2] = led3;
+    _leds[3] = led4;
+    _num = 4;
+    ledOn = false;
+  }
+  
+  MultiLED(LED *led1, LED *led2)
+  {
+    _leds = (LED **) malloc(sizeof(LED *) * 2);
+    _leds[0] = led1;
+    _leds[1] = led2;
+    _num = 2;
+    ledOn = false;
+  }
+  
+  void show()
+  {
+    for (int i=0; i < _num; i++) 
+      _leds[i]->show();
+    ledOn = true;
+  }
+  
+  void hide()
+  {
+    for (int i=0; i < _num; i++) 
+      _leds[i]->hide();
+    ledOn = false;
+  }
+  
+};
+
+
 class Flasher { 
   protected:
    int _speedPotPin;
@@ -144,26 +190,50 @@ class Flasher {
 };
   
 
+#define MODE_INDEPENDENT 0
+#define MODE_ALL_SYNC 1
+#define MODE_LEFT_RIGHT_SYNC 2
+#define NUM_MODES 3
+
+#define YELLOW_POT 3
+#define GREEN_POT 2
+#define BLUE_POT 1
+#define RED_POT 0
 
 
-RGBLED *triple1, *triple2;
-SingleLED *single1, *single2;
-Flasher *flasher1, *flasher2, *flasher3, *flasher4;
- 
+#define BUTTON_PIN 12
+RGBLED *triple_left, *triple_right;
+SingleLED *single_right, *single_left;
+MultiLED *multi1, *multi_left_leds, *multi_right_leds;
+Flasher *flasher1, *flasher2, *flasher3, *flasher4, *flasher5, *flasher_left_leds, *flasher_right_leds;
+Bounce bouncer = Bounce(BUTTON_PIN, 5);
+int mode = MODE_INDEPENDENT;
+
 void setup()
 {
   Serial.begin(9600); 
-  triple1 = new RGBLED(9,10,11,2);
-  flasher1 = new Flasher(0, triple1);
+  triple_left = new RGBLED(9,10,11,2);
+  flasher1 = new Flasher(RED_POT, triple_left);
   
-  triple2 = new RGBLED(3, 5, 6, 4);
-  flasher2 = new Flasher(1, triple2);
+  triple_right = new RGBLED(3, 5, 6, 4);
+  flasher2 = new Flasher(BLUE_POT, triple_right);
   
-  single1 = new SingleLED(7);
-  flasher3 = new Flasher(2, single1);
+  single_right = new SingleLED(7);
+  flasher3 = new Flasher(GREEN_POT, single_right);
   
-  single2 = new SingleLED(8);
-  flasher4 = new Flasher(3, single2);
+  single_left = new SingleLED(8);
+  flasher4 = new Flasher(YELLOW_POT, single_left);
+  
+  multi1 = new MultiLED(triple_left, triple_right, single_right, single_left);
+  flasher5 = new Flasher(RED_POT, multi1);
+  
+  multi_left_leds = new MultiLED(triple_left, single_left);
+  flasher_left_leds = new Flasher(YELLOW_POT, multi_left_leds);
+  
+  multi_right_leds = new MultiLED(triple_right, single_right);
+  flasher_right_leds = new Flasher(GREEN_POT, multi_right_leds);
+  
+  pinMode(BUTTON_PIN, INPUT); 
   
   randomSeed(analogRead(0));
 }
@@ -171,8 +241,29 @@ void setup()
  
 void loop()
 {
-  flasher1->tick();  
-  flasher2->tick();
-  flasher3->tick();
-  flasher4->tick();
+  // Update the debouncer
+  bouncer.update( );
+
+  // Get the update value 
+  if (bouncer.fallingEdge()) {
+    mode++;
+    mode = mode % NUM_MODES;
+  }
+  
+  switch(mode) 
+  {
+    case MODE_INDEPENDENT:
+      flasher1->tick();  
+      flasher2->tick();
+      flasher3->tick();
+      flasher4->tick();
+      break;
+    case MODE_ALL_SYNC:
+      flasher5->tick();
+      break;  
+    case MODE_LEFT_RIGHT_SYNC:
+      flasher_left_leds->tick();
+      flasher_right_leds->tick();
+      break;
+  }
 }
