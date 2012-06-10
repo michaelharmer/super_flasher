@@ -139,28 +139,71 @@ class MultiLED : public LED {
   
 };
 
-
-class Flasher { 
+class InvertedLED : public LED {
   protected:
-   int _speedPotPin;
-   unsigned long _blinkSpeed;
-   unsigned long _timeForNextEvent;
-   LED *_led;
-   
-  public:
+    LED *_led;
   
-    Flasher(int speedPotPin, LED *led)
+  public:
+    InvertedLED(LED *led)
     {
-      _speedPotPin = speedPotPin;  
-      setTimeForNextFlash();
       _led = led;
-    }
-
-    long getBlinkSpeed()
+      ledOn = false;
+    }  
+    
+    void show()
     {
-      return map(analogRead(_speedPotPin), 0, 1023, 25, 1000);
+      _led->hide();  
     }
     
+    void hide()
+    {
+      _led->show(); 
+    }
+  
+  
+};
+
+class CyclingMultiLED : public LED {
+  protected:
+    LED **_leds;
+    int _num;
+    int _current_on;
+  
+  public:
+  
+  CyclingMultiLED(LED *led1, LED *led2, LED *led3, LED *led4)
+  {
+    _leds = (LED **) malloc(sizeof(LED *) * 4);
+    _leds[0] = led1;
+    _leds[1] = led2;
+    _leds[2] = led3;
+    _leds[3] = led4;
+    _num = 4;
+    ledOn = false;
+    _current_on = 0;
+    _leds[_current_on]->show();
+  }
+  
+  void show()
+  {
+    _leds[_current_on]->hide();
+    _current_on = (_current_on == 3) ? 0 : _current_on + 1;
+    _leds[_current_on]->show();
+  }
+  
+  void hide()
+  {
+    // do nothing
+  }
+  
+};
+
+class Flasher {
+  protected:
+   unsigned long _timeForNextEvent;
+   LED *_led;
+
+  public:
     void setTimeForNextFlash()
     {
       _timeForNextEvent = millis() + getBlinkSpeed();        
@@ -168,7 +211,7 @@ class Flasher {
     
     void setTimeForEndOfFlash()
     {
-      _timeForNextEvent = millis() + FLASH_LENGTH;
+      _timeForNextEvent = millis() + getFlashLength();
     }
     
     void tick()
@@ -187,13 +230,70 @@ class Flasher {
         }
       }
     }
+  
+    virtual long getBlinkSpeed() = 0;
+    virtual long getFlashLength() = 0;
+  
+};
+
+class FixedFlashLengthFlasher : public Flasher { 
+  protected:
+   int _speedPotPin;
+  
+   
+  public:
+  
+    FixedFlashLengthFlasher(int speedPotPin, LED *led)
+    {
+      _speedPotPin = speedPotPin;  
+      setTimeForNextFlash();
+      _led = led;
+    }
+
+    virtual long getBlinkSpeed()
+    {
+      return map(analogRead(_speedPotPin), 0, 1023, 25, 1000);
+    }
+    
+    virtual long getFlashLength()
+    {
+      return FLASH_LENGTH;  
+    }
+    
+};
+  
+class VariableLengthFlasher : public Flasher { 
+  protected:
+   int _speedPotPin;
+  
+   
+  public:
+  
+    VariableLengthFlasher(int speedPotPin, LED *led)
+    {
+      _speedPotPin = speedPotPin;  
+      setTimeForNextFlash();
+      _led = led;
+    }
+
+    virtual long getBlinkSpeed()
+    {
+      return map(analogRead(_speedPotPin), 0, 1023, 25, 1000);
+    }
+    
+    virtual long getFlashLength()
+    {
+      return getBlinkSpeed();  
+    }
+    
 };
   
 
 #define MODE_INDEPENDENT 0
 #define MODE_ALL_SYNC 1
-#define MODE_LEFT_RIGHT_SYNC 2
-#define NUM_MODES 3
+#define MODE_LEFT_RIGHT_ALTERNATE 2
+#define MODE_CYCLING 3
+#define NUM_MODES 4
 
 #define YELLOW_POT 3
 #define GREEN_POT 2
@@ -204,8 +304,11 @@ class Flasher {
 #define BUTTON_PIN 12
 RGBLED *triple_left, *triple_right;
 SingleLED *single_right, *single_left;
-MultiLED *multi1, *multi_left_leds, *multi_right_leds;
-Flasher *flasher1, *flasher2, *flasher3, *flasher4, *flasher5, *flasher_left_leds, *flasher_right_leds;
+MultiLED *multi1, *multi_left_leds, *multi_right_leds, *multi_left_normal_right_inveted_leds;
+InvertedLED *inverted_right_leds;
+CyclingMultiLED *cycling_leds;
+
+Flasher *flasher1, *flasher2, *flasher3, *flasher4, *flasher5, *flasher_variable_left_normal_right_inveted, *flasher_cycling;
 Bounce bouncer = Bounce(BUTTON_PIN, 5);
 int mode = MODE_INDEPENDENT;
 
@@ -213,25 +316,29 @@ void setup()
 {
   Serial.begin(9600); 
   triple_left = new RGBLED(9,10,11,2);
-  flasher1 = new Flasher(RED_POT, triple_left);
+  flasher1 = new FixedFlashLengthFlasher(RED_POT, triple_left);
   
   triple_right = new RGBLED(3, 5, 6, 4);
-  flasher2 = new Flasher(BLUE_POT, triple_right);
+  flasher2 = new FixedFlashLengthFlasher(BLUE_POT, triple_right);
   
   single_right = new SingleLED(7);
-  flasher3 = new Flasher(GREEN_POT, single_right);
+  flasher3 = new FixedFlashLengthFlasher(GREEN_POT, single_right);
   
   single_left = new SingleLED(8);
-  flasher4 = new Flasher(YELLOW_POT, single_left);
+  flasher4 = new FixedFlashLengthFlasher(YELLOW_POT, single_left);
   
   multi1 = new MultiLED(triple_left, triple_right, single_right, single_left);
-  flasher5 = new Flasher(RED_POT, multi1);
+  flasher5 = new FixedFlashLengthFlasher(YELLOW_POT, multi1);
   
   multi_left_leds = new MultiLED(triple_left, single_left);
-  flasher_left_leds = new Flasher(YELLOW_POT, multi_left_leds);
-  
   multi_right_leds = new MultiLED(triple_right, single_right);
-  flasher_right_leds = new Flasher(GREEN_POT, multi_right_leds);
+  inverted_right_leds = new InvertedLED(multi_right_leds);
+  multi_left_normal_right_inveted_leds = new MultiLED(multi_left_leds, inverted_right_leds);
+  
+  flasher_variable_left_normal_right_inveted = new VariableLengthFlasher(YELLOW_POT, multi_left_normal_right_inveted_leds);
+  
+  cycling_leds = new CyclingMultiLED(single_left, triple_left, triple_right, single_right);
+  flasher_cycling = new VariableLengthFlasher(YELLOW_POT, cycling_leds);
   
   pinMode(BUTTON_PIN, INPUT); 
   
@@ -261,9 +368,11 @@ void loop()
     case MODE_ALL_SYNC:
       flasher5->tick();
       break;  
-    case MODE_LEFT_RIGHT_SYNC:
-      flasher_left_leds->tick();
-      flasher_right_leds->tick();
+    case MODE_LEFT_RIGHT_ALTERNATE:
+      flasher_variable_left_normal_right_inveted->tick();
+      break;
+    case MODE_CYCLING:
+      flasher_cycling->tick();
       break;
   }
 }
